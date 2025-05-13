@@ -1,0 +1,175 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.presentation-page .presentation-container {
+    max-width: 905px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
+    background: #FFFFFF;
+    min-height: 739px;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Roboto', 'Arial', sans-serif;
+    position: relative;
+}
+
+.presentation-page .presentation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    margin-bottom: 30px;
+}
+
+    .presentation-page .presentation-header::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: #D4A373;
+    }
+
+.presentation-page .presentation-logo {
+    height: 70px;
+    width: 200px;
+}
+
+.presentation-page .presentation-welcome {
+    font-size: 50px;
+    font-weight: bold;
+    color: #1A3C5A;
+}
+
+.presentation-page .presentation-name {
+}
+
+.presentation-page .presentation-user-profile {
+    display: flex;
+    align-items: center;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 40px;
+}
+
+.presentation-page .presentation-user-image {
+    width: 129px;
+    height: 129px;
+    border-radius: 7%;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.presentation-page .presentation-timer {
+    font-size: 24px;
+    color: #666666;
+}
+
+.presentation-page .presentation-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.presentation-page .presentation-message {
+    display: flex;
+    align-items: center;
+    border: 2px solid #D8D7E7;
+    border-radius: 5px;
+    padding: 15px; /* Ajustado para un cuadrado más uniforme */
+    background-color: #FFF9C4; /* Fondo amarillo claro */
+}
+
+.presentation-page .message-text {
+    font-size: 24px; /* Aumentado de 20px a 24px */
+}
+
+.presentation-page .presentation-section {
+    display: flex;
+    flex-direction: column;
+}
+
+    .presentation-page .presentation-section label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: bold;
+        font-size: 30px;
+        color: #333333;
+    }
+
+    .presentation-page .presentation-section button {
+        display: flex;
+        font-weight: bold;
+        font-size: 20px;
+        justify-content: center;
+    }
+
+.presentation-page .presentation-button {
+    background-color: #d32f2f;
+    color: white;
+    padding: 20px 30px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 5px;
+    width: 250px;
+    font-size: 20px;
+}
+
+.presentation-page .presentation-button-container {
+    display: flex;
+    justify-content: space-between;
+    position: absolute;
+    bottom: 40px;
+    left: 20px;
+    right: 20px;
+}
+
+.presentation-page .presentation-button-wrapper {
+    display: flex;
+    justify-content: flex-start;
+    gap: 10px;
+}
+
+.presentation-page .presentation-finalize-button {
+    background-color: #d32f2f;
+    color: white;
+    padding: 20px 40px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-bottom: 4px solid #a12626;
+    font-size: 20px;
+    padding-bottom: 13px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.presentation-page .presentation-textarea {
+    width: 100%;
+    height: 100px;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    resize: none;
+    font-size: 17px;
+}

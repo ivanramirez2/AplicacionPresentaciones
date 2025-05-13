@@ -1,0 +1,25 @@
+# Ignorar archivos de configuración sensibles
+Web.config
+*.config
+
+# Ignorar archivos y carpetas generados por Visual Studio
+bin/
+obj/
+*.suo
+*.user
+*.sln.docstates
+*.csproj.user
+
+# Ignorar carpetas de paquetes y dependencias
+packages/
+*.nupkg
+
+# Ignorar archivos temporales y de depuración
+*.log
+*.bak
+*.tmp
+Debug/
+Release/
+
+# Ignorar archivos de entorno local
+.env

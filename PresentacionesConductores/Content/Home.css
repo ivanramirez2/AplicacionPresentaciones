@@ -1,0 +1,249 @@
+﻿html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden; /* Evitar scroll en toda la página */
+}
+
+.home-page .inicio-container {
+    max-width: 905px;
+    margin: 0 auto;
+    padding: 0px;
+    text-align: center;
+    background: #FFFFFF;
+    min-height: 739px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    font-family: 'Arial', sans-serif;
+}
+
+/* HEADER */
+.home-page .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    margin-bottom: 20px;
+}
+
+    .home-page .header::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: #D4A373;
+    }
+
+.home-page .logo {
+    width: 200px;
+    margin-right: 20px;
+}
+
+.home-page .date {
+    font-size: 24px;
+    color: #666666;
+    font-weight: 500;
+}
+
+/* TITLE */
+.home-page h1 {
+    font-size: 44px;
+    margin-bottom: 30px;
+    font-weight: 700;
+    color: #1A3C5A;
+    text-shadow: 2px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* FORM CONTAINER */
+.home-page .form-container {
+    display: flex;
+    justify-content: center;
+}
+
+/* KEY PAD Y INPUTS */
+.home-page .keypad-and-inputs {
+    display: flex;
+    flex-direction: row-reverse;
+    gap: 50px;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+}
+
+/* INPUTS */
+.home-page .inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.home-page .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+}
+
+    .home-page .form-group label {
+        font-size: 42px;
+        font-weight: 500;
+        color: #333333;
+    }
+
+/* DISPLAY */
+.home-page .display {
+    width: 350px;
+    padding: 15px;
+    border: 2px solid #666666;
+    border-radius: 6px;
+    font-size: 40px;
+    text-align: center;
+    background-color: #FFFFFF;
+    cursor: pointer;
+}
+
+    .home-page .display[data-is-password="true"] {
+        font-family: monospace;
+        letter-spacing: 5px;
+    }
+
+/* KEY PAD */
+.home-page .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    gap: 10px;
+    width: auto;
+}
+
+    /* KEY PAD BTN */
+    .home-page .keypad button {
+        border: 2px solid #666666;
+        border-radius: 6px;
+        width: 60px;
+        height: 60px;
+        font-size: 44px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        /* Hover para botones numéricos*/
+        .home-page .keypad button:not(.clear-btn):not(.submit-btn):hover {
+            background-color: #1A3C5A;
+            color: white;
+            border-color: #1A3C5A;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+
+    .home-page .keypad .clear-btn {
+        background-color: #FF9999;
+        color: white;
+        border: 2px solid #1A3C5A;
+    }
+
+        /* Hover para Clear */
+        .home-page .keypad .clear-btn:hover {
+            background-color: #FF9999;
+            color: white;
+            border: 2px solid #FF9999;
+            box-shadow: 0 4px 7px rgba(255, 0, 0, 0.7); /* Sombra roja más fuerte y profunda */
+        }
+
+
+    .home-page .keypad .submit-btn {
+        background-color: #D4A373;
+        color: white;
+        border: 2px solid #1A3C5A;
+    }
+
+        /* Hover para Submit */
+        .home-page .keypad .submit-btn:hover {
+            background-color: #D4A373;
+            color: white;
+            border: 2px solid #D4A373;
+            box-shadow: 0 6px 15px rgba(212, 163, 115, 0.8); /* Más intensidad y profundidad en el color */
+        }
+
+
+/* Pop Ups */
+
+/* 🎨 Estilo mejorado del pop-up */
+.popup-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6); /* Fondo oscuro translúcido */
+    display: none;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px); /*  Efecto de desenfoque */
+    transition: opacity 0.3s ease-in-out;
+}
+
+    .popup-container.active {
+        display: flex;
+        opacity: 1;
+    }
+
+.popup-content {
+    background: linear-gradient(135deg, #1A3C5A, #E61A18); /*  Azul y rojo vibrante */
+
+    color: #FFF;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    width: 380px;
+    position: relative;
+    font-family: 'Arial', sans-serif;
+}
+
+    /* Texto del pop-up */
+    .popup-content p {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+
+    /* Botón estilizado */
+    .popup-content button {
+        background-color: #FFF;
+        color: #1A3C5A;
+        border: none;
+        padding: 12px 18px;
+        font-size: 18px;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+        .popup-content button:hover {
+            background-color: #D4A373;
+            color: #FFF;
+            box-shadow: 0 4px 10px rgba(212, 163, 115, 0.6);
+        }
+
+/* Animación de entrada */
+@keyframes fadeIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.popup-content {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
