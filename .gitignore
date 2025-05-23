@@ -1,7 +1,7 @@
 # Ignorar archivos de configuración sensibles
 Web.config
 *.config
-
+*.vsidx
 # Ignorar archivos y carpetas generados por Visual Studio
 bin/
 obj/
