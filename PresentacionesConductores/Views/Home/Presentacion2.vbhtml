@@ -34,11 +34,11 @@ End Code
             </div>
             <div class="presentation-button-container">
                 <div class="presentation-button-wrapper">
-                    <form method="get" action="/Home/DescargarServicioExcel">
+                    <form method="get" action="/Home/ImprimirServicioSinIncidenciaExcel">
                         <button class="presentation-button" type="submit">IMPRIMIR SERVICIO</button>
                     </form>
 
-                    <form method="get" action="/Home/GenerarPDF">
+                    <form method="get" action="/Home/ImprimirIncidenciaExcel">
                         <button class="presentation-button" type="submit">IMPRIMIR INCIDENCIA</button>
                     </form>
                 </div>

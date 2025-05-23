@@ -22,7 +22,7 @@ Public Class HomeController
     End Function
 
     <HttpPost>
-    Function ProcesarFormulario(numeroEmpleado As String) As ActionResult
+    Function ProcesarFormulario(numeroEmpleado As String, pin As String) As ActionResult
         Dim connectionString1 As String = ConfigurationManager.ConnectionStrings("SQLServerConnection1").ConnectionString 'MLORRHH'
         Dim connectionString2 As String = ConfigurationManager.ConnectionStrings("SQLServerConnection2").ConnectionString 'MLOOPER'
 
@@ -42,17 +42,16 @@ Public Class HomeController
                     End If
                 End Using
             Catch ex As Exception
-                ViewBag.ErrorMensaje = "Error inesperado: " & ex.Message
+                ViewBag.ErrorMensaje = "Error inesperado al verificar el empleado: " & ex.Message
                 Return View("Index")
             End Try
         End Using
 
-        ' Verificar conductor, estado de presentación y servicio
+        ' Verificar si el empleado está registrado como conductor (MLOOPER)
         Using conn2 As New SqlConnection(connectionString2)
             Try
                 conn2.Open()
 
-                ' Verificar si el empleado está registrado como conductor
                 Dim esConductorQuery As String = "SELECT COUNT(*) FROM TbPRESENTACIONES WHERE EMPLEADO = @cod_empleado AND CONDUCTOR IS NOT NULL"
                 Using cmd As New SqlCommand(esConductorQuery, conn2)
                     cmd.Parameters.AddWithValue("@cod_empleado", numeroEmpleado)
@@ -63,8 +62,51 @@ Public Class HomeController
                         Return View("Index")
                     End If
                 End Using
+            Catch ex As Exception
+                ViewBag.ErrorMensaje = "Error inesperado al verificar el conductor: " & ex.Message
+                Return View("Index")
+            End Try
+        End Using
 
-                ' Verificar si el empleado tiene un servicio asignado
+        ' Verificar el PIN del empleado (MLORRHH)
+        Using conn1 As New SqlConnection(connectionString1)
+            Try
+                conn1.Open()
+
+                If String.IsNullOrWhiteSpace(pin) Then
+                    ViewBag.ErrorMensaje = "El PIN no puede estar vacío. Por favor, ingrese un PIN válido."
+                    Return View("Index")
+                End If
+
+                Dim pinQuery As String = "SELECT PIN FROM RRHH_PF_EMPLEADOS WHERE COD_EMPLEADO = @cod_empleado"
+                Using cmd As New SqlCommand(pinQuery, conn1)
+                    cmd.Parameters.AddWithValue("@cod_empleado", numeroEmpleado)
+                    Dim pinAlmacenado As Object = cmd.ExecuteScalar()
+
+                    If pinAlmacenado Is Nothing Then
+                        ViewBag.ErrorMensaje = "No se encontró un PIN registrado para este empleado. Contacte con su responsable."
+                        Return View("Index")
+                    End If
+
+                    Dim pinAlmacenadoStr As String = pinAlmacenado.ToString().Trim()
+                    Dim pinIngresado As String = pin.Trim()
+
+                    If Not String.Equals(pinAlmacenadoStr, pinIngresado, StringComparison.OrdinalIgnoreCase) Then
+                        ViewBag.ErrorMensaje = "PIN INCORRECTO. Por favor, intenta de nuevo."
+                        Return View("Index")
+                    End If
+                End Using
+            Catch ex As Exception
+                ViewBag.ErrorMensaje = "Error inesperado al verificar el PIN: " & ex.Message
+                Return View("Index")
+            End Try
+        End Using
+
+        ' Verificar si el empleado tiene un servicio asignado (MLOOPER)
+        Using conn2 As New SqlConnection(connectionString2)
+            Try
+                conn2.Open()
+
                 Dim servicioQuery As String = "SELECT TOP 1 SERVICIO FROM TbPRESENTACIONES WHERE EMPLEADO = @cod_empleado ORDER BY Id DESC"
                 Using cmd As New SqlCommand(servicioQuery, conn2)
                     cmd.Parameters.AddWithValue("@cod_empleado", numeroEmpleado)
@@ -76,7 +118,7 @@ Public Class HomeController
                     End If
                 End Using
 
-                ' Obtener la hora programada desde la base de datos antes de actualizar cualquier campo
+                ' Obtener la hora programada desde la base de datos
                 Dim horaProgramadaQuery As String = "SELECT HPROGRAMADA FROM TbPRESENTACIONES WHERE EMPLEADO = @cod_empleado"
                 Using cmd As New SqlCommand(horaProgramadaQuery, conn2)
                     cmd.Parameters.AddWithValue("@cod_empleado", numeroEmpleado)
@@ -85,16 +127,14 @@ Public Class HomeController
                     ' Obtener la hora actual del sistema
                     Dim horaActual As String = DateTime.Now.ToString("HH:mm")
 
-                    ' Verificar si el empleado ya se presentó antes de comprobar la hora
+                    ' Verificar si el empleado ya se presentó
                     Dim presentadoQuery As String = "SELECT PRESENTADO FROM TbPRESENTACIONES WHERE EMPLEADO = @cod_empleado"
                     Using cmdPres As New SqlCommand(presentadoQuery, conn2)
                         cmdPres.Parameters.AddWithValue("@cod_empleado", numeroEmpleado)
                         Dim presentado As Integer = Convert.ToInt32(cmdPres.ExecuteScalar())
 
-                        ' Si `PRESENTADO = 1`, permitir el acceso sin mostrar mensajes de error
                         If presentado = 1 Then
                             TempData("NumeroEmpleado") = numeroEmpleado
-                            ' Obtener el nombre del empleado antes de redirigir
                             Using conn1 As New SqlConnection(connectionString1)
                                 conn1.Open()
                                 Dim nombreEmpleadoQuery As String = "SELECT NOMBRE FROM RRHH_PF_EMPLEADOS WHERE COD_EMPLEADO = @cod_empleado"
@@ -107,12 +147,7 @@ Public Class HomeController
                             Return RedirectToAction("Presentacion")
                         End If
 
-
-                        ' SI LLEGA 2H ANTES JUSTAS ENTRA, SI LLEGA 2H Y 1MIN O MAS YA NO ENTRA
-                        ' SI LLEGA 2H TARDE JUSTAS ENTRA, SI LLEGA 2H Y 1MIN TARDE O MAS NO ENTRA
-
-                        ' Comparar si el empleado llega demasiado temprano
-                        ' SI LLEGA 2H ANTES JUSTAS ENTRA, SI LLEGA 2H Y 1MIN O MAS YA NO ENTRA
+                        ' Verificar llegada adelantada (2 horas o más)
                         If Not String.IsNullOrEmpty(horaProgramada) Then
                             Dim horaProgramadaTime As TimeSpan = TimeSpan.Parse(horaProgramada)
                             Dim horaActualTime As TimeSpan = TimeSpan.Parse(horaActual)
@@ -121,12 +156,11 @@ Public Class HomeController
                                 Dim diferencia As TimeSpan = horaProgramadaTime - horaActualTime
                                 Dim mensajeDiferencia As String = String.Format("{0} horas y {1} minutos", CInt(diferencia.TotalHours), diferencia.Minutes)
                                 ViewBag.ErrorMensaje = "LLEGADA ADELANTADA. Hora programada: " & horaProgramada & ", Hora de llegada: " & horaActual & ". Llegó " & mensajeDiferencia & " antes. ESPERE Y PRESÉNTESE A LA HORA INDICADA."
-                                Return View("Index") ' No guarda HREAL ni redirige
+                                Return View("Index")
                             End If
                         End If
 
-                        ' Comparar si el empleado llega demasiado tarde
-                        ' SI LLEGA 2H TARDE JUSTAS ENTRA, SI LLEGA 2H Y 1MIN TARDE O MAS NO ENTRA
+                        ' Verificar llegada tarde (2 horas o más)
                         If Not String.IsNullOrEmpty(horaProgramada) Then
                             Dim horaProgramadaTime As TimeSpan = TimeSpan.Parse(horaProgramada)
                             Dim horaActualTime As TimeSpan = TimeSpan.Parse(horaActual)
@@ -135,11 +169,11 @@ Public Class HomeController
                                 Dim diferencia As TimeSpan = horaActualTime - horaProgramadaTime
                                 Dim mensajeDiferencia As String = String.Format("{0} horas y {1} minutos", CInt(diferencia.TotalHours), diferencia.Minutes)
                                 ViewBag.ErrorMensaje = "LLEGADA TARDE. Hora programada: " & horaProgramada & ", Hora de llegada: " & horaActual & ". Llegó " & mensajeDiferencia & " tarde. NO SE PERMITE LA ENTRADA."
-                                Return View("Index") ' No guarda HREAL ni redirige
+                                Return View("Index")
                             End If
                         End If
 
-                        ' SOLO SI LLEGA A TIEMPO Y PRESENTADO = 0, GUARDAR `HREAL`
+                        ' Actualizar HREAL si llega a tiempo y PRESENTADO = 0
                         Dim actualizarHoraQuery As String = "UPDATE TbPRESENTACIONES SET HREAL = @hora WHERE EMPLEADO = @cod_empleado"
                         Using updateCmd As New SqlCommand(actualizarHoraQuery, conn2)
                             updateCmd.Parameters.AddWithValue("@hora", DateTime.Now.ToString("HH:mm"))
@@ -149,7 +183,7 @@ Public Class HomeController
                     End Using
                 End Using
 
-                ' Obtener el nombre del empleado antes de redirigir (MLORRHH)
+                ' Obtener el nombre del empleado (MLORRHH)
                 Using conn1 As New SqlConnection(connectionString1)
                     Try
                         conn1.Open()
@@ -157,23 +191,16 @@ Public Class HomeController
                         Using cmd As New SqlCommand(nombreEmpleadoQuery, conn1)
                             cmd.Parameters.AddWithValue("@cod_empleado", numeroEmpleado)
                             Dim nombreEmpleado As String = TryCast(cmd.ExecuteScalar(), String)
-
-                            If Not String.IsNullOrEmpty(nombreEmpleado) Then
-                                TempData("NombreEmpleado") = nombreEmpleado
-                            Else
-                                TempData("NombreEmpleado") = "Empleado desconocido"
-                            End If
+                            TempData("NombreEmpleado") = If(String.IsNullOrEmpty(nombreEmpleado), "Empleado desconocido", nombreEmpleado)
                         End Using
                     Catch ex As Exception
-                        ViewBag.ErrorMensaje = "Error inesperado: " & ex.Message
+                        ViewBag.ErrorMensaje = "Error al obtener el nombre del empleado: " & ex.Message
                         Return View("Index")
                     End Try
                 End Using
 
-                ' Guardar número de empleado y permitir el acceso si todo está correcto
                 TempData("NumeroEmpleado") = numeroEmpleado
                 Return RedirectToAction("Presentacion")
-
             Catch ex As Exception
                 ViewBag.ErrorMensaje = "Error inesperado: " & ex.Message
                 Return View("Index")
@@ -181,6 +208,9 @@ Public Class HomeController
         End Using
     End Function
 
+
+
+    ' Función que obtiene la imagen del empleado'
     Function ObtenerImagen(numeroEmpleado As Integer) As ActionResult
         Dim connectionString1 As String = ConfigurationManager.ConnectionStrings("SQLServerConnection1").ConnectionString
 
@@ -193,7 +223,7 @@ Public Class HomeController
                 Dim imagenBytes As Byte() = TryCast(cmd.ExecuteScalar(), Byte())
 
                 If imagenBytes IsNot Nothing Then
-                    Return File(imagenBytes, "image/jpeg") ' formato JPEG
+                    Return File(imagenBytes, "image/jpeg")
                 Else
                     Return File("~/Content/Images/usuario_cuadrado.png", "image/png")
                 End If
@@ -382,48 +412,635 @@ Public Class HomeController
         Return View()
     End Function
 
-    Function DescargarServicioExcel() As ActionResult
-        ' 1. Obtener datos
-        Dim servicio As String = If(TempData("Servicio"), "SIN SERVICIO ASIGNADO")
 
-        ' 2. Copiar plantilla a un stream temporal
-        Dim plantillaPath As String = Server.MapPath("~/Content/Plantillas/Plantilla.xlsx")
-        Dim tempStream As New MemoryStream()
-        Using fileStream As New FileStream(plantillaPath, FileMode.Open)
-            fileStream.CopyTo(tempStream)
-        End Using
-        tempStream.Position = 0
 
-        ' 3. Manipular el archivo con OpenXML
-        Using package As SpreadsheetDocument = SpreadsheetDocument.Open(tempStream, True)
-            Dim workbookPart As WorkbookPart = package.WorkbookPart
-            Dim sheets As Sheets = workbookPart.Workbook.Sheets
 
-            ' Buscar la hoja con el nombre del servicio
-            Dim hojaServicio As Sheet = sheets.Elements(Of Sheet)().FirstOrDefault(Function(s) s.Name = servicio)
 
-            If hojaServicio IsNot Nothing Then
-                ' Identificar hojas que deben eliminarse
-                Dim hojasAEliminar = sheets.Elements(Of Sheet)().Where(Function(s) s.Name <> hojaServicio.Name).ToList()
+    Function ImprimirServicioSinIncidenciaExcel() As ActionResult
+        Try
+            ' 1. Obtener datos del servicio y empleado
+            Dim servicio As String = If(TempData("Servicio"), "SIN SERVICIO ASIGNADO")
+            Dim employeeId As String = If(TempData("NumeroEmpleado") IsNot Nothing, TempData("NumeroEmpleado").ToString(), "")
 
-                For Each sheet In hojasAEliminar
-                    Dim wsPart As WorksheetPart = workbookPart.GetPartById(sheet.Id)
+            ' 2. Consultar tabla MLO para obtener DESC_TIPO_DIA
+            Dim descTipoDia As String = ""
+            Dim connectionString As String = ConfigurationManager.ConnectionStrings("SQLServerConnection3").ConnectionString
 
-                    ' **Eliminar completamente la hoja del libro**
-                    workbookPart.DeletePart(wsPart)
-                    sheet.Remove()
+            Using conn As New SqlConnection(connectionString)
+                Try
+                    conn.Open()
+                    ' Consulta para obtener DESC_TIPO_DIA haciendo JOIN entre las tablas
+                    Dim queryMLO As String = "SELECT TOP 1 td.DESC_TIPO_DIA " &
+                                        "FROM [MLO].[dbo].[VIGENCIAS] v " &
+                                        "INNER JOIN [MLO].[dbo].[TIPOS_DIA] td ON v.ID_TIPO_DIA = td.ID_TIPO_DIA " &
+                                        "INNER JOIN [MLO].[dbo].[TIPOS_DIA_RELACION_TORNOS] tdrt ON td.ID_RELACION_TORNO = tdrt.ID_RELACION_TORNO " &
+                                        "WHERE v.FECHA_OPERACION <= GETDATE() " &
+                                        "ORDER BY v.FECHA_OPERACION DESC"
+
+                    Using cmd As New SqlCommand(queryMLO, conn)
+                        Dim result = cmd.ExecuteScalar()
+                        If result IsNot Nothing Then
+                            descTipoDia = result.ToString().Trim()
+                        End If
+                    End Using
+                Catch ex As Exception
+                    Debug.WriteLine("Error al obtener DESC_TIPO_DIA: " & ex.Message)
+                    Throw New Exception("Error al consultar la tabla MLO: " & ex.Message)
+                End Try
+            End Using
+
+            ' 3. Seleccionar plantilla basada en DESC_TIPO_DIA
+            Dim plantillaPath As String = ""
+            Dim plantillasDirectory As String = Server.MapPath("~/Content/Plantillas/")
+
+            If Not String.IsNullOrEmpty(descTipoDia) AndAlso descTipoDia.Length >= 2 Then
+                ' Obtener las dos primeras letras de DESC_TIPO_DIA
+                Dim prefijo As String = descTipoDia.Substring(0, 2).ToUpper()
+
+                ' Buscar archivo Excel que comience con esas dos letras
+                Dim archivosExcel() As String = Directory.GetFiles(plantillasDirectory, "*.xlsx")
+
+                For Each archivo In archivosExcel
+                    Dim nombreArchivo As String = Path.GetFileName(archivo).ToUpper()
+                    If nombreArchivo.StartsWith(prefijo) Then
+                        plantillaPath = archivo
+                        Exit For
+                    End If
                 Next
 
-                ' Guardar cambios
-                workbookPart.Workbook.Save()
+                ' Si no se encuentra archivo con el prefijo, usar plantilla por defecto
+                If String.IsNullOrEmpty(plantillaPath) Then
+                    Debug.WriteLine($"No se encontró plantilla que comience con '{prefijo}'. Usando plantilla por defecto.")
+                    plantillaPath = Server.MapPath("~/Content/Plantillas/Plantilla.xlsx")
+                End If
             Else
-                Dim sheetNames As String = String.Join(", ", sheets.Elements(Of Sheet)().Select(Function(s) s.Name))
-                Throw New Exception($"Las hojas disponibles en el archivo son: {sheetNames}. No se encontró una hoja con el nombre '{servicio}'")
-            End If
-        End Using
+                ' Si no hay DESC_TIPO_DIA válido, usar lógica por día de la semana como respaldo
+                Debug.WriteLine("DESC_TIPO_DIA no válido. Usando selección por día de la semana.")
+                Dim diaSemana As DayOfWeek = DateTime.Now.DayOfWeek
 
-        ' 4. Devolver el archivo modificado
-        tempStream.Position = 0
-        Return File(tempStream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Servicio.xlsx")
+                Select Case diaSemana
+                    Case DayOfWeek.Thursday, DayOfWeek.Friday
+                        plantillaPath = Server.MapPath("~/Content/Plantillas/Plantilla.xlsx")
+                End Select
+            End If
+
+            ' Verificar que la plantilla seleccionada existe
+            If Not System.IO.File.Exists(plantillaPath) Then
+                Throw New FileNotFoundException($"No se encontró la plantilla: {plantillaPath}")
+            End If
+
+            Debug.WriteLine($"Plantilla seleccionada: {Path.GetFileName(plantillaPath)} basada en DESC_TIPO_DIA: '{descTipoDia}'")
+
+            Dim tempExcelPath As String = Server.MapPath("~/Temp/" & Guid.NewGuid().ToString() & ".xlsx")
+            Dim tempPdfPath As String = Server.MapPath("~/Temp/" & Guid.NewGuid().ToString() & ".pdf")
+
+            ' Asegurarse de que la carpeta Temp exista
+            If Not Directory.Exists(Server.MapPath("~/Temp")) Then
+                Directory.CreateDirectory(Server.MapPath("~/Temp"))
+            End If
+
+            ' Copiar la plantilla seleccionada al archivo temporal
+            System.IO.File.Copy(plantillaPath, tempExcelPath)
+
+            ' 4. Manipular el archivo Excel con OpenXML
+            Using package As SpreadsheetDocument = SpreadsheetDocument.Open(tempExcelPath, True)
+                Dim workbookPart As WorkbookPart = package.WorkbookPart
+                Dim sheets As Sheets = workbookPart.Workbook.Sheets
+
+                ' Buscar la hoja con el nombre del servicio
+                Dim hojaServicio As Sheet = sheets.Elements(Of Sheet)().FirstOrDefault(Function(s) s.Name = servicio)
+
+                If hojaServicio IsNot Nothing Then
+                    ' Obtener la hoja seleccionada
+                    Dim wsPartServicio As WorksheetPart = workbookPart.GetPartById(hojaServicio.Id)
+                    Dim wsServicio As Worksheet = wsPartServicio.Worksheet
+                    Dim sheetData As SheetData = wsServicio.GetFirstChild(Of SheetData)()
+
+                    ' Crear o recuperar el WorkbookStylesPart y el Stylesheet mínimo
+                    Dim stylesPart As WorkbookStylesPart = workbookPart.WorkbookStylesPart
+                    If stylesPart Is Nothing Then
+                        stylesPart = workbookPart.AddNewPart(Of WorkbookStylesPart)()
+                        Dim ss As New Stylesheet()
+                        ss.Fonts = New Fonts(New DocumentFormat.OpenXml.Spreadsheet.Font())
+                        ss.Fills = New Fills(
+                    New Fill(New PatternFill() With {.PatternType = PatternValues.None}),
+                    New Fill(New PatternFill() With {.PatternType = PatternValues.Gray125}))
+                        ss.Borders = New Borders(New Border())
+                        ss.CellFormats = New CellFormats(New CellFormat())
+                        ss.CellStyles = New CellStyles(New CellStyle() With {.Name = "Normal", .FormatId = 0, .BuiltinId = 0})
+                        ss.Save()
+                        stylesPart.Stylesheet = ss
+                    End If
+
+                    Dim ssheet As Stylesheet = stylesPart.Stylesheet
+                    If ssheet.Fills Is Nothing Then
+                        ssheet.Fills = New Fills()
+                    End If
+
+                    Dim yellowFillIndex As Integer = -1
+                    Dim countFills As Integer = ssheet.Fills.ChildElements.Count
+                    For i As Integer = 0 To countFills - 1
+                        Dim f As Fill = CType(ssheet.Fills.ElementAt(i), Fill)
+                        Dim pf As PatternFill = f.GetFirstChild(Of PatternFill)()
+                        If pf IsNot Nothing AndAlso pf.PatternType = PatternValues.Solid Then
+                            Dim fc As ForegroundColor = pf.ForegroundColor
+                            If fc IsNot Nothing AndAlso fc.Rgb IsNot Nothing AndAlso fc.Rgb.Value.ToUpper() = "FFFF00" Then
+                                yellowFillIndex = i
+                                Exit For
+                            End If
+                        End If
+                    Next
+
+                    If yellowFillIndex = -1 Then
+                        Dim yellowFill As New Fill(New PatternFill() With {
+                    .PatternType = PatternValues.Solid,
+                    .ForegroundColor = New ForegroundColor() With {.Rgb = "FFFF00"},
+                    .BackgroundColor = New BackgroundColor() With {.Rgb = "FFFF00"}
+                })
+                        ssheet.Fills.Append(yellowFill)
+                        ssheet.Fills.Count = CLng(ssheet.Fills.ChildElements.Count)
+                        yellowFillIndex = ssheet.Fills.ChildElements.Count - 1
+                    End If
+
+                    ' ----- Consulta SQL: Si el empleado tiene incidencia -----
+                    Dim incidenceCode As String = ""
+                    Using conn As New SqlConnection(connectionString)
+                        Try
+                            conn.Open()
+                            Dim query As String = "SELECT TOP 1 INCIDENCIAS FROM TbPRESENTACIONES WHERE EMPLEADO = @cod_empleado"
+                            Using cmd As New SqlCommand(query, conn)
+                                cmd.Parameters.AddWithValue("@cod_empleado", employeeId)
+                                Dim result = cmd.ExecuteScalar()
+                                If result IsNot Nothing Then
+                                    incidenceCode = result.ToString()
+                                End If
+                            End Using
+                        Catch ex As Exception
+                            Debug.WriteLine("Error al obtener incidencia: " & ex.Message)
+                        End Try
+                    End Using
+
+                    If Not String.IsNullOrEmpty(incidenceCode) Then
+                        ' Recorrer todas las celdas de la hoja y, si su valor contiene el código de incidencia, aplicar el relleno amarillo
+                        For Each row In sheetData.Elements(Of Row)()
+                            For Each cell In row.Elements(Of Cell)()
+                                ' Implementación inline de GetCellValue
+                                Dim cellValue As String = ""
+                                If cell IsNot Nothing AndAlso cell.CellValue IsNot Nothing Then
+                                    cellValue = cell.CellValue.InnerText
+                                    If cell.DataType IsNot Nothing AndAlso cell.DataType = CellValues.SharedString Then
+                                        Dim sst = workbookPart.GetPartsOfType(Of SharedStringTablePart)().FirstOrDefault()
+                                        If sst IsNot Nothing Then
+                                            cellValue = sst.SharedStringTable.ElementAt(Integer.Parse(cellValue)).InnerText
+                                        End If
+                                    End If
+                                End If
+
+                                If Not String.IsNullOrEmpty(cellValue) AndAlso cellValue.Contains(incidenceCode) Then
+                                    ' Preservar el formato existente y agregar solo el relleno amarillo
+                                    Dim currentStyleIndex As UInt32 = 0
+                                    If cell.StyleIndex IsNot Nothing Then
+                                        currentStyleIndex = cell.StyleIndex
+                                    End If
+
+                                    ' Obtener el estilo actual
+                                    Dim currentCellFormat As CellFormat = Nothing
+                                    If currentStyleIndex < ssheet.CellFormats.Count.Value Then
+                                        currentCellFormat = CType(ssheet.CellFormats.ElementAt(CInt(currentStyleIndex)), CellFormat)
+                                    End If
+                                    ' Crear nuevo formato basado en el formato actual
+                                    Dim newCellFormat As New CellFormat()
+
+                                    ' Copiar todas las propiedades del formato actual
+                                    If currentCellFormat IsNot Nothing Then
+                                        ' Copiar propiedades de numeración
+                                        If currentCellFormat.NumberFormatId IsNot Nothing Then
+                                            newCellFormat.NumberFormatId = currentCellFormat.NumberFormatId
+                                        End If
+
+                                        If currentCellFormat.ApplyNumberFormat IsNot Nothing Then
+                                            newCellFormat.ApplyNumberFormat = currentCellFormat.ApplyNumberFormat
+                                        End If
+
+                                        ' Copiar propiedades de fuente
+                                        If currentCellFormat.FontId IsNot Nothing Then
+                                            newCellFormat.FontId = currentCellFormat.FontId
+                                        End If
+
+                                        If currentCellFormat.ApplyFont IsNot Nothing Then
+                                            newCellFormat.ApplyFont = currentCellFormat.ApplyFont
+                                        End If
+
+                                        ' Copiar propiedades de bordes
+                                        If currentCellFormat.BorderId IsNot Nothing Then
+                                            newCellFormat.BorderId = currentCellFormat.BorderId
+                                        End If
+
+                                        If currentCellFormat.ApplyBorder IsNot Nothing Then
+                                            newCellFormat.ApplyBorder = currentCellFormat.ApplyBorder
+                                        End If
+
+                                        ' Copiar propiedades de alineación
+                                        If currentCellFormat.Alignment IsNot Nothing Then
+                                            newCellFormat.Alignment = CType(currentCellFormat.Alignment.CloneNode(True), Alignment)
+                                        End If
+
+                                        If currentCellFormat.ApplyAlignment IsNot Nothing Then
+                                            newCellFormat.ApplyAlignment = currentCellFormat.ApplyAlignment
+                                        End If
+
+                                        ' Copiar propiedades de protección
+                                        If currentCellFormat.Protection IsNot Nothing Then
+                                            newCellFormat.Protection = CType(currentCellFormat.Protection.CloneNode(True), Protection)
+                                        End If
+
+                                        If currentCellFormat.ApplyProtection IsNot Nothing Then
+                                            newCellFormat.ApplyProtection = currentCellFormat.ApplyProtection
+                                        End If
+                                    Else
+                                        ' Propiedades por defecto si no hay formato previo
+                                        newCellFormat.FontId = 0
+                                        newCellFormat.BorderId = 0
+                                    End If
+
+                                    ' Establecer el relleno amarillo
+                                    newCellFormat.FillId = CUInt(yellowFillIndex)
+                                    newCellFormat.ApplyFill = True
+
+                                    ' Añadir el formato a la hoja de estilos
+                                    ssheet.CellFormats.Append(newCellFormat)
+                                    ssheet.CellFormats.Count = CLng(ssheet.CellFormats.ChildElements.Count)
+                                    Dim newCellFormatIndex As UInt32 = CUInt(ssheet.CellFormats.ChildElements.Count - 1)
+
+                                    ' Aplicar el nuevo estilo a la celda
+                                    cell.StyleIndex = newCellFormatIndex
+                                End If
+                            Next
+                        Next
+                        stylesPart.Stylesheet.Save()
+                        wsServicio.Save()
+                        workbookPart.Workbook.Save()
+                    End If
+                Else
+                    Dim sheetNames As String = String.Join(", ", sheets.Elements(Of Sheet)().Select(Function(s) s.Name))
+                    Throw New Exception($"Las hojas disponibles en el archivo son: {sheetNames}. No se encontró una hoja con el nombre '{servicio}'")
+                End If
+            End Using
+
+            ' 5. Convertir Excel a PDF usando una instancia de Excel, especificando la hoja del servicio
+            ConvertExcelToPdf(tempExcelPath, tempPdfPath, servicio)
+
+            ' 6. Imprimir el PDF generado
+            ImprimirPdf(tempPdfPath)
+
+            ' 7. Limpiar archivos temporales
+            Try
+                If System.IO.File.Exists(tempExcelPath) Then
+                    System.IO.File.Delete(tempExcelPath)
+                End If
+                If System.IO.File.Exists(tempPdfPath) Then
+                    System.IO.File.Delete(tempPdfPath)
+                End If
+            Catch ex As Exception
+                ' Registrar error de limpieza pero continuar
+                Debug.WriteLine("Error al eliminar archivos temporales: " & ex.Message)
+            End Try
+
+            Return Content("Servicio impreso correctamente en PDF")
+        Catch ex As Exception
+            Return Content("Error al procesar e imprimir el servicio: " & ex.Message)
+        End Try
     End Function
+
+
+    Function ImprimirIncidenciaExcel() As ActionResult
+        Try
+            ' 1. Obtener datos del servicio y empleado
+            Dim servicio As String = If(TempData("Servicio"), "SIN SERVICIO ASIGNADO")
+            Dim employeeId As String = If(TempData("NumeroEmpleado") IsNot Nothing, TempData("NumeroEmpleado").ToString(), "")
+
+            ' 2. Generar nombre del archivo de incidencias basado en la fecha actual
+            Dim fechaActual As DateTime = DateTime.Now
+            Dim nombresDias As String() = {"DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"}
+            Dim nombresMeses As String() = {"", "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"}
+
+            Dim diaNombre As String = nombresDias(fechaActual.DayOfWeek)
+            Dim diaNumero As String = fechaActual.Day.ToString()
+            Dim mesNombre As String = nombresMeses(fechaActual.Month)
+
+            Dim nombreArchivoIncidencias As String = $"INCIDENCIAS {diaNombre} {diaNumero} {mesNombre}.xlsx"
+
+            ' 3. Buscar el archivo con el nombre generado en la carpeta de plantillas
+            Dim plantillaPath As String = Server.MapPath($"~/Content/Plantillas/{nombreArchivoIncidencias}")
+
+            ' Si no existe el archivo específico, usar plantilla por defecto
+            If Not System.IO.File.Exists(plantillaPath) Then
+                Debug.WriteLine($"No se encontró el archivo: {nombreArchivoIncidencias}. Usando plantilla por defecto.")
+                plantillaPath = Server.MapPath("~/Content/Plantillas/Plantilla.xlsx")
+            Else
+                Debug.WriteLine($"Usando archivo: {nombreArchivoIncidencias}")
+            End If
+
+            Dim tempExcelPath As String = Server.MapPath("~/Temp/" & Guid.NewGuid().ToString() & ".xlsx")
+            Dim tempPdfPath As String = Server.MapPath("~/Temp/" & Guid.NewGuid().ToString() & ".pdf")
+
+            ' Asegurarse de que la carpeta Temp exista
+            If Not Directory.Exists(Server.MapPath("~/Temp")) Then
+                Directory.CreateDirectory(Server.MapPath("~/Temp"))
+            End If
+
+            ' Copiar plantilla al archivo temporal
+            System.IO.File.Copy(plantillaPath, tempExcelPath)
+
+            ' 4. Manipular el archivo Excel con OpenXML
+            Using package As SpreadsheetDocument = SpreadsheetDocument.Open(tempExcelPath, True)
+                Dim workbookPart As WorkbookPart = package.WorkbookPart
+                Dim sheets As Sheets = workbookPart.Workbook.Sheets
+
+                ' Buscar la hoja con el nombre del servicio
+                Dim hojaServicio As Sheet = sheets.Elements(Of Sheet)().FirstOrDefault(Function(s) s.Name = servicio)
+
+                If hojaServicio IsNot Nothing Then
+                    ' Obtener la hoja seleccionada
+                    Dim wsPartServicio As WorksheetPart = workbookPart.GetPartById(hojaServicio.Id)
+                    Dim wsServicio As Worksheet = wsPartServicio.Worksheet
+                    Dim sheetData As SheetData = wsServicio.GetFirstChild(Of SheetData)()
+
+                    ' Crear o recuperar el WorkbookStylesPart y el Stylesheet mínimo
+                    Dim stylesPart As WorkbookStylesPart = workbookPart.WorkbookStylesPart
+                    If stylesPart Is Nothing Then
+                        stylesPart = workbookPart.AddNewPart(Of WorkbookStylesPart)()
+                        Dim ss As New Stylesheet()
+                        ss.Fonts = New Fonts(New DocumentFormat.OpenXml.Spreadsheet.Font())
+                        ss.Fills = New Fills(
+                    New Fill(New PatternFill() With {.PatternType = PatternValues.None}),
+                    New Fill(New PatternFill() With {.PatternType = PatternValues.Gray125}))
+                        ss.Borders = New Borders(New Border())
+                        ss.CellFormats = New CellFormats(New CellFormat())
+                        ss.CellStyles = New CellStyles(New CellStyle() With {.Name = "Normal", .FormatId = 0, .BuiltinId = 0})
+                        ss.Save()
+                        stylesPart.Stylesheet = ss
+                    End If
+
+                    Dim ssheet As Stylesheet = stylesPart.Stylesheet
+                    If ssheet.Fills Is Nothing Then
+                        ssheet.Fills = New Fills()
+                    End If
+
+                    Dim yellowFillIndex As Integer = -1
+                    Dim countFills As Integer = ssheet.Fills.ChildElements.Count
+                    For i As Integer = 0 To countFills - 1
+                        Dim f As Fill = CType(ssheet.Fills.ElementAt(i), Fill)
+                        Dim pf As PatternFill = f.GetFirstChild(Of PatternFill)()
+                        If pf IsNot Nothing AndAlso pf.PatternType = PatternValues.Solid Then
+                            Dim fc As ForegroundColor = pf.ForegroundColor
+                            If fc IsNot Nothing AndAlso fc.Rgb IsNot Nothing AndAlso fc.Rgb.Value.ToUpper() = "FFFF00" Then
+                                yellowFillIndex = i
+                                Exit For
+                            End If
+                        End If
+                    Next
+
+                    If yellowFillIndex = -1 Then
+                        Dim yellowFill As New Fill(New PatternFill() With {
+                    .PatternType = PatternValues.Solid,
+                    .ForegroundColor = New ForegroundColor() With {.Rgb = "FFFF00"},
+                    .BackgroundColor = New BackgroundColor() With {.Rgb = "FFFF00"}
+                })
+                        ssheet.Fills.Append(yellowFill)
+                        ssheet.Fills.Count = CLng(ssheet.Fills.ChildElements.Count)
+                        yellowFillIndex = ssheet.Fills.ChildElements.Count - 1
+                    End If
+
+                    ' ----- Consulta SQL: Si el empleado tiene incidencia -----
+                    Dim incidenceCode As String = ""
+                    Dim connectionString As String = ConfigurationManager.ConnectionStrings("SQLServerConnection2").ConnectionString
+                    Using conn As New SqlConnection(connectionString)
+                        Try
+                            conn.Open()
+                            Dim query As String = "SELECT TOP 1 INCIDENCIAS FROM TbPRESENTACIONES WHERE EMPLEADO = @cod_empleado"
+                            Using cmd As New SqlCommand(query, conn)
+                                cmd.Parameters.AddWithValue("@cod_empleado", employeeId)
+                                Dim result = cmd.ExecuteScalar()
+                                If result IsNot Nothing Then
+                                    incidenceCode = result.ToString()
+                                End If
+                            End Using
+                        Catch ex As Exception
+                            Debug.WriteLine("Error al obtener incidencia: " & ex.Message)
+                        End Try
+                    End Using
+
+                    If Not String.IsNullOrEmpty(incidenceCode) Then
+                        ' Recorrer todas las celdas de la hoja y, si su valor contiene el código de incidencia, aplicar el relleno amarillo
+                        For Each row In sheetData.Elements(Of Row)()
+                            For Each cell In row.Elements(Of Cell)()
+                                ' Implementación inline de GetCellValue
+                                Dim cellValue As String = ""
+                                If cell IsNot Nothing AndAlso cell.CellValue IsNot Nothing Then
+                                    cellValue = cell.CellValue.InnerText
+                                    If cell.DataType IsNot Nothing AndAlso cell.DataType = CellValues.SharedString Then
+                                        Dim sst = workbookPart.GetPartsOfType(Of SharedStringTablePart)().FirstOrDefault()
+                                        If sst IsNot Nothing Then
+                                            cellValue = sst.SharedStringTable.ElementAt(Integer.Parse(cellValue)).InnerText
+                                        End If
+                                    End If
+                                End If
+
+                                If Not String.IsNullOrEmpty(cellValue) AndAlso cellValue.Contains(incidenceCode) Then
+                                    ' Preservar el formato existente y agregar solo el relleno amarillo
+                                    Dim currentStyleIndex As UInt32 = 0
+                                    If cell.StyleIndex IsNot Nothing Then
+                                        currentStyleIndex = cell.StyleIndex
+                                    End If
+
+                                    ' Obtener el estilo actual
+                                    Dim currentCellFormat As CellFormat = Nothing
+                                    If currentStyleIndex < ssheet.CellFormats.Count.Value Then
+                                        currentCellFormat = CType(ssheet.CellFormats.ElementAt(CInt(currentStyleIndex)), CellFormat)
+                                    End If
+                                    ' Crear nuevo formato basado en el formato actual
+                                    Dim newCellFormat As New CellFormat()
+
+                                    ' Copiar todas las propiedades del formato actual
+                                    If currentCellFormat IsNot Nothing Then
+                                        ' Copiar propiedades de numeración
+                                        If currentCellFormat.NumberFormatId IsNot Nothing Then
+                                            newCellFormat.NumberFormatId = currentCellFormat.NumberFormatId
+                                        End If
+
+                                        If currentCellFormat.ApplyNumberFormat IsNot Nothing Then
+                                            newCellFormat.ApplyNumberFormat = currentCellFormat.ApplyNumberFormat
+                                        End If
+
+                                        ' Copiar propiedades de fuente
+                                        If currentCellFormat.FontId IsNot Nothing Then
+                                            newCellFormat.FontId = currentCellFormat.FontId
+                                        End If
+
+                                        If currentCellFormat.ApplyFont IsNot Nothing Then
+                                            newCellFormat.ApplyFont = currentCellFormat.ApplyFont
+                                        End If
+
+                                        ' Copiar propiedades de bordes
+                                        If currentCellFormat.BorderId IsNot Nothing Then
+                                            newCellFormat.BorderId = currentCellFormat.BorderId
+                                        End If
+
+                                        If currentCellFormat.ApplyBorder IsNot Nothing Then
+                                            newCellFormat.ApplyBorder = currentCellFormat.ApplyBorder
+                                        End If
+
+                                        ' Copiar propiedades de alineación
+                                        If currentCellFormat.Alignment IsNot Nothing Then
+                                            newCellFormat.Alignment = CType(currentCellFormat.Alignment.CloneNode(True), Alignment)
+                                        End If
+
+                                        If currentCellFormat.ApplyAlignment IsNot Nothing Then
+                                            newCellFormat.ApplyAlignment = currentCellFormat.ApplyAlignment
+                                        End If
+
+                                        ' Copiar propiedades de protección
+                                        If currentCellFormat.Protection IsNot Nothing Then
+                                            newCellFormat.Protection = CType(currentCellFormat.Protection.CloneNode(True), Protection)
+                                        End If
+
+                                        If currentCellFormat.ApplyProtection IsNot Nothing Then
+                                            newCellFormat.ApplyProtection = currentCellFormat.ApplyProtection
+                                        End If
+                                    Else
+                                        ' Propiedades por defecto si no hay formato previo
+                                        newCellFormat.FontId = 0
+                                        newCellFormat.BorderId = 0
+                                    End If
+
+                                    ' Aplicar el relleno amarillo
+                                    newCellFormat.FillId = CUInt(yellowFillIndex)
+                                    newCellFormat.ApplyFill = New BooleanValue(True)
+
+                                    ' Añadir el formato a la hoja de estilos
+                                    ssheet.CellFormats.Append(newCellFormat)
+                                    ssheet.CellFormats.Count = CLng(ssheet.CellFormats.ChildElements.Count)
+                                    Dim newCellFormatIndex As UInt32 = CUInt(ssheet.CellFormats.ChildElements.Count - 1)
+
+                                    ' Aplicar el nuevo estilo a la celda
+                                    cell.StyleIndex = newCellFormatIndex
+                                End If
+                            Next
+                        Next
+                        stylesPart.Stylesheet.Save()
+                        wsServicio.Save()
+                        workbookPart.Workbook.Save()
+                    End If
+                Else
+                    Dim sheetNames As String = String.Join(", ", sheets.Elements(Of Sheet)().Select(Function(s) s.Name))
+                    Throw New Exception($"Las hojas disponibles en el archivo son: {sheetNames}. No se encontró una hoja con el nombre '{servicio}'")
+                End If
+            End Using
+
+            ' 5. Convertir Excel a PDF usando una instancia de Excel, especificando la hoja del servicio
+            ConvertExcelToPdf(tempExcelPath, tempPdfPath, servicio)
+
+            ' 6. Imprimir el PDF generado
+            ImprimirPdf(tempPdfPath)
+
+            ' 7. Limpiar archivos temporales
+            Try
+                If System.IO.File.Exists(tempExcelPath) Then
+                    System.IO.File.Delete(tempExcelPath)
+                End If
+                If System.IO.File.Exists(tempPdfPath) Then
+                    System.IO.File.Delete(tempPdfPath)
+                End If
+            Catch ex As Exception
+                ' Registrar error de limpieza pero continuar
+                Debug.WriteLine("Error al eliminar archivos temporales: " & ex.Message)
+            End Try
+
+            Return Content("Incidencia impresa correctamente en PDF")
+        Catch ex As Exception
+            Return Content("Error al procesar e imprimir la incidencia: " & ex.Message)
+        End Try
+    End Function
+
+
+    ' Convertir solo la hoja especificada de Excel a PDF usando Microsoft.Office.Interop.Excel
+    Private Sub ConvertExcelToPdf(excelPath As String, pdfPath As String, sheetName As String)
+        Dim excelApp As Object = Nothing
+        Dim workbooks As Object = Nothing
+        Dim workbook As Object = Nothing
+        Dim worksheet As Object = Nothing
+
+        Try
+            ' Crear instancia de Excel
+            excelApp = CreateObject("Excel.Application")
+            excelApp.Visible = False
+            excelApp.DisplayAlerts = False
+
+            ' Abrir el libro de trabajo
+            workbooks = excelApp.Workbooks
+            workbook = workbooks.Open(excelPath)
+
+            ' Obtener la hoja específica por nombre
+            worksheet = workbook.Sheets(sheetName)
+
+            ' Exportar solo esa hoja como PDF
+            worksheet.ExportAsFixedFormat(0, pdfPath) ' 0 = xlTypePDF
+        Catch ex As Exception
+            Throw New Exception("Error al convertir Excel a PDF: " & ex.Message)
+        Finally
+            ' Limpiar objetos COM
+            If worksheet IsNot Nothing Then
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(worksheet)
+                worksheet = Nothing
+            End If
+
+            If workbook IsNot Nothing Then
+                workbook.Close(False)
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(workbook)
+                workbook = Nothing
+            End If
+
+            If workbooks IsNot Nothing Then
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(workbooks)
+                workbooks = Nothing
+            End If
+
+            If excelApp IsNot Nothing Then
+                excelApp.Quit()
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp)
+                excelApp = Nothing
+            End If
+
+            ' Forzar la recolección de basura
+            GC.Collect()
+            GC.WaitForPendingFinalizers()
+        End Try
+    End Sub
+
+    ' Método para imprimir PDF utilizando SumatraPDF (sin cambios)
+    Private Sub ImprimirPdf(pdfPath As String)
+        ' Ruta real al ejecutable de SumatraPDF
+        Dim sumatraPath As String = "C:\Users\ivan.ramirez\AppData\Local\SumatraPDF\SumatraPDF.exe"
+        If Not System.IO.File.Exists(sumatraPath) Then
+            Throw New FileNotFoundException("No se encontró SumatraPDF en la ruta: " & sumatraPath)
+        End If
+
+        ' Configurar el proceso para imprimir usando SumatraPDF en la impresora predeterminada
+        Dim psi As New ProcessStartInfo()
+        psi.FileName = sumatraPath
+        psi.Arguments = String.Format("-print-to-default ""{0}""", pdfPath)
+        psi.CreateNoWindow = True
+        psi.WindowStyle = ProcessWindowStyle.Hidden
+        psi.UseShellExecute = False
+
+        Dim proc As Process = Process.Start(psi)
+        ' Esperar hasta 10 segundos para que finalice el proceso de impresión
+        proc.WaitForExit(10000)
+
+        ' Si el proceso aún no ha finalizado, lo cerramos
+        If Not proc.HasExited Then
+            proc.Kill()
+        End If
+    End Sub
 End Class
