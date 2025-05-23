@@ -23,3 +23,7 @@ Release/
 
 # Ignorar archivos de entorno local
 .env
+
+# Ignorar archivos temporales
+*.log
+*.tmp
