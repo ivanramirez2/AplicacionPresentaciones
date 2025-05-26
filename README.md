@@ -6,7 +6,7 @@
 
 ## 📝 Descripción
 
-**Servicios Metro Ligero** es una aplicación web desarrollada en **ASP.NET MVC** con **SQL Server**, diseñada para ser utilizada en **tablets por conductores** del metro ligero (líneas **ML2** y **ML3**). Permite iniciar sesión de forma segura, consultar servicios e incidencias del día, e imprimir documentos rápidamente. Esta solución reemplaza procesos manuales, agilizando operaciones y reduciendo errores en horas punta.
+**Servicios Metro Ligero** es una aplicación web desarrollada en **ASP.NET MVC** con **SQL Server**, diseñada para ser utilizada en **tablets por conductores** del metro ligero (líneas **ML2** y **ML3**). Permite iniciar sesión de forma segura, consultar servicios e incidencias del día, e imprimir documentos rápidamente con coloreado amarillo en su servicio del día. Esta solución reemplaza procesos manuales, agilizando operaciones y reduciendo errores en horas punta.
 
 ---
 
