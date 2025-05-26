@@ -22,7 +22,7 @@
   Filtros por fecha y línea para revisar incidencias activas.
 
 - 🖨️ **Impresión Rápida**  
-  Generación de documentos imprimibles (PDF/Excel) desde la tablet.
+  Generación de documentos imprimibles (PDF/Excel) con posibilidad de que salga la celda de la incidencia/servicio en amarillo.
 
 - 📱 **Interfaz Responsive**  
   Diseño adaptado a tablets con navegación táctil e intuitiva.
